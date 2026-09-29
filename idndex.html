@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Private Editor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  html,body{height:100%;margin:0}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:#e6e6e6;color:#252423}
+  .rb{min-width:32px;height:32px;border-radius:3px;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:#323130;cursor:pointer;background:transparent}
+  .rb:hover{background:#e1dfdd}
+  .rb.on{background:#c7e0f4;border-color:#8ab4dd}
+  .rb:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid #2b579a;outline-offset:1px}
+  .grp{display:flex;flex-direction:column;align-items:center;padding:0 12px;border-right:1px solid #d2d0ce}
+  .grp small{font-size:11px;color:#605e5c;margin-top:2px}
+  .paper{width:816px;max-width:100%;min-height:1056px;background:#fff;padding:96px;box-sizing:border-box;box-shadow:0 1px 3px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.12)}
+  .paper.exporting{box-shadow:none}
+  #editor{min-height:864px;outline:none;font-family:Calibri,Carlito,"Segoe UI",sans-serif;font-size:15px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+  #editor:empty:before{content:attr(data-ph);color:#a19f9d}
+  .exporting #editor:empty:before{content:""}
+  .side label{font-size:13px;font-weight:600;display:block;margin-bottom:6px}
+  .side select{width:100%;padding:7px 8px;border:1px solid #8a8886;border-radius:3px;background:#fff;font-size:14px}
+  input[type=range]{width:100%;accent-color:#2b579a}
+  @media (max-width:900px){.paper{padding:40px 28px}}
+
+  body{--bg:#e6e6e6;--rib:#f3f2f1;--side:#faf9f8;--tx:#252423;--mut:#605e5c;--bd:#d2d0ce;--hov:#e1dfdd;--on:#c7e0f4;--inp:#fff;--title:#2b579a;background:var(--bg);color:var(--tx)}
+  body.dark{--bg:#1c1c1c;--rib:#2d2d2d;--side:#262626;--tx:#e8e8e8;--mut:#a9a9a9;--bd:#464646;--hov:#3d3d3d;--on:#40587e;--inp:#383838;--title:#1f1f1f}
+  .titlebar{background:var(--title);color:#fff}
+  .tbtn{color:#fff;padding:0 10px;height:28px;border-radius:3px;font-size:13px;cursor:pointer}
+  .tbtn:hover{background:rgba(255,255,255,.18)}
+  .ribbon{background:var(--rib);border-bottom:1px solid var(--bd)}
+  .tabs{display:flex;padding:0 12px;border-bottom:1px solid var(--bd)}
+  .tab{padding:5px 14px;font-size:13px;font-weight:600;border-bottom:2px solid #2b7cd3}
+  .rbar{display:flex;align-items:stretch;overflow-x:auto;padding:6px 0}
+  .rb{color:var(--tx)} .rb:hover{background:var(--hov)} .rb.on{background:var(--on);border-color:#5b8ec9}
+  .grp{border-right:1px solid var(--bd);justify-content:space-between} .grp small{color:var(--mut)}
+  .side select,.ribbon select{background:var(--inp);color:var(--tx);border:1px solid var(--bd);border-radius:3px;font-size:13px;padding:4px 6px}
+  .side select{padding:7px 8px;font-size:14px}
+  .side{background:var(--side);color:var(--tx)}
+  .side h2,.side p{color:var(--mut)!important}
+  .border-gray-300{border-color:var(--bd)!important}
+  #drawer{position:fixed;top:36px;bottom:26px;right:0;width:300px;z-index:20;transform:translateX(102%);transition:transform .2s;box-shadow:-6px 0 20px rgba(0,0,0,.3)}
+  #drawer.open{transform:none}
+  .status{height:26px;display:flex;gap:20px;align-items:center;padding:0 14px;font-size:12px;background:var(--title);color:#fff;flex-shrink:0}
+  .sw{width:16px;height:16px;border-radius:50%;border:1px solid var(--bd);cursor:pointer;padding:0}
+  .paper{background:var(--pbg,#fff);color:var(--pink,#222);caret-color:var(--pink,#222);flex-shrink:0}
+  #editor{font-size:11pt}
+  .paper.lined #editor{line-height:32px;background-image:linear-gradient(to bottom,transparent 0,transparent 31px,var(--pline) 31px,var(--pline) 32px);background-size:100% 32px}
+  #workspace{padding-bottom:48px}
+</style>
+</head>
+<body class="dark">
+<div class="flex flex-col h-full">
+  <!-- Title bar -->
+  <div class="titlebar flex items-center gap-2 px-3 h-9 text-sm">
+    <i class="fa-solid fa-file-word mr-1"></i>
+    <span>Document1 &ndash; Private Editor</span>
+    <span class="ml-auto"></span>
+    <button id="themeBtn" class="tbtn" title="Switch light / dark" aria-label="Switch light or dark mode"></button>
+    <button id="soundBtn" class="tbtn" title="Sounds &amp; export"><i class="fa-solid fa-volume-high mr-2"></i>Sounds</button>
+  </div>
+  <!-- Ribbon -->
+  <div class="ribbon" role="toolbar" aria-label="Formatting">
+    <div class="tabs"><span class="tab">Home</span></div>
+    <div class="rbar">
+      <div class="grp">
+        <div class="flex gap-0.5">
+          <button class="rb" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+          <button class="rb" data-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+        </div><small>Undo</small>
+      </div>
+      <div class="grp">
+        <div>
+          <div class="flex items-center gap-1">
+            <select id="fsize" aria-label="Font size" title="Font size" style="width:64px"></select>
+            <button class="rb" id="fup" title="Increase font size" aria-label="Increase font size" style="font-size:15px;font-weight:600">A<sup style="font-size:9px">+</sup></button>
+            <button class="rb" id="fdn" title="Decrease font size" aria-label="Decrease font size" style="font-size:12px;font-weight:600">A<sup style="font-size:9px">&minus;</sup></button>
+          </div>
+          <div class="flex items-center gap-0.5 mt-1">
+            <button class="rb" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><i class="fa-solid fa-bold"></i></button>
+            <button class="rb" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i class="fa-solid fa-italic"></i></button>
+            <button class="rb" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><i class="fa-solid fa-underline"></i></button>
+            <label class="rb" title="Font color" style="position:relative;flex-direction:column;gap:1px;margin-left:4px">
+              <span style="font-weight:700;line-height:1;font-size:14px">A</span>
+              <span id="colorBar" style="display:block;width:16px;height:3px;background:#e03131"></span>
+              <input id="fcolor" type="color" value="#e03131" aria-label="Pick font color" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer">
+            </label>
+            <span class="flex items-center gap-1 ml-1">
+              <button class="sw" data-color="auto" style="background:linear-gradient(135deg,#fff 50%,#000 50%)" aria-label="Automatic color" title="Automatic"></button>
+              <button class="sw" data-color="#e03131" style="background:#e03131" aria-label="Red" title="Red"></button><button class="sw" data-color="#f08c00" style="background:#f08c00" aria-label="Orange" title="Orange"></button><button class="sw" data-color="#2f9e44" style="background:#2f9e44" aria-label="Green" title="Green"></button><button class="sw" data-color="#1971c2" style="background:#1971c2" aria-label="Blue" title="Blue"></button><button class="sw" data-color="#7048e8" style="background:#7048e8" aria-label="Purple" title="Purple"></button><button class="sw" data-color="#868e96" style="background:#868e96" aria-label="Gray" title="Gray"></button>
+            </span>
+          </div>
+        </div><small>Font</small>
+      </div>
+      <div class="grp">
+        <div class="flex gap-0.5">
+          <button class="rb" data-cmd="justifyLeft" title="Align left" aria-label="Align left"><i class="fa-solid fa-align-left"></i></button>
+          <button class="rb" data-cmd="justifyCenter" title="Center" aria-label="Align center"><i class="fa-solid fa-align-center"></i></button>
+          <button class="rb" data-cmd="justifyRight" title="Align right" aria-label="Align right"><i class="fa-solid fa-align-right"></i></button>
+        </div><small>Paragraph</small>
+      </div>
+      <div class="grp" style="border-right:0">
+        <select id="paperSel" aria-label="Paper style" title="Paper style" style="width:130px"></select>
+        <small>Paper</small>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="flex flex-1 min-h-0">
+    <!-- Sidebar -->
+    <aside id="drawer" class="side overflow-y-auto p-4 space-y-5 border-l border-gray-300">
+      <section class="space-y-3">
+        <h2 class="text-sm font-semibold text-gray-600"><i class="fa-solid fa-keyboard mr-2"></i>Typing sounds</h2>
+        <div>
+          <label for="profile">Keyboard sound profile</label>
+          <select id="profile"></select>
+        </div>
+        <div>
+          <label for="keyVol">Typing volume <span id="keyVolOut" class="font-normal text-gray-500">60%</span></label>
+          <input id="keyVol" type="range" min="0" max="100" value="60">
+        </div>
+        <div class="flex items-center gap-4 text-sm"><button id="testKey" class="text-[#2b579a] hover:underline"><i class="fa-solid fa-play mr-1"></i>Test key</button><button id="rand" class="text-[#2b579a] hover:underline"><i class="fa-solid fa-shuffle mr-1"></i>Randomize</button></div>
+        <label class="flex items-center gap-2 text-sm" style="font-weight:400;margin:0"><input id="relSnd" type="checkbox" checked> Play key-release sound</label>
+      </section>
+      <section class="space-y-3 pt-4 border-t border-gray-300">
+        <h2 class="text-sm font-semibold text-gray-600"><i class="fa-solid fa-cloud-rain mr-2"></i>Ambient atmosphere</h2>
+        <div>
+          <label for="ambient">Background sound</label>
+          <select id="ambient"></select>
+        </div>
+        <div>
+          <label for="ambVol">Ambient volume <span id="ambVolOut" class="font-normal text-gray-500">40%</span></label>
+          <input id="ambVol" type="range" min="0" max="100" value="40">
+        </div>
+      </section>
+      <section class="pt-4 border-t border-gray-300 space-y-3">
+        <h2 class="text-sm font-semibold"><i class="fa-solid fa-download mr-2"></i>Save &amp; export</h2>
+        <div>
+          <label for="imgFmt">Image format</label>
+          <select id="imgFmt"><option value="png">PNG</option><option value="jpg">JPG</option></select>
+        </div>
+        <button id="exportBtn" class="w-full py-3 rounded text-white font-semibold text-sm hover:brightness-110" style="background:#2b579a">
+          <i class="fa-solid fa-image mr-2"></i><span id="exportLabel">Export Document as Image</span>
+        </button>
+        <div class="pt-2">
+          <label for="fileFmt">Save as a file</label>
+          <select id="fileFmt"><option value="txt">Text file (.txt)</option><option value="doc">Word document (.doc)</option><option value="html">Web page (.html)</option></select>
+        </div>
+        <button id="fileBtn" class="w-full py-3 rounded font-semibold text-sm" style="background:var(--inp);color:var(--tx);border:1px solid var(--bd)">
+          <i class="fa-solid fa-file-arrow-down mr-2"></i><span id="fileLabel">Save Document as File</span>
+        </button>
+        <label id="askRow" class="flex items-center gap-2 text-sm" style="font-weight:400;margin:0"><input id="askWhere" type="checkbox"> Choose where to save</label>
+        <p class="text-xs">Everything is created on your device. Nothing is uploaded.</p>
+      </section>
+    </aside>
+
+    <!-- Workspace -->
+    <main class="flex-1 overflow-auto py-8 px-4 flex justify-center items-start" id="workspace">
+      <div class="paper" id="paper">
+        <div id="editor" contenteditable="true" spellcheck="true" data-ph="Start typing on the page&hellip;" aria-label="Document"></div>
+      </div>
+    </main>
+  </div>
+  <div class="status"><span><b id="wc">0</b> words</span><span><b id="cc">0</b> characters</span></div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const editor = $('editor');
+
+  /* ---------- Formatting ---------- */
+  const cmdBtns = [...document.querySelectorAll('[data-cmd]')];
+  cmdBtns.forEach(b => {
+    b.addEventListener('mousedown', e => e.preventDefault()); // keep selection
+    b.addEventListener('click', () => { editor.focus(); document.execCommand(b.dataset.cmd, false, null); refresh(); });
+  });
+  function refresh() {
+    cmdBtns.forEach(b => {
+      if (['undo', 'redo'].includes(b.dataset.cmd)) return;
+      let on = false; try { on = document.queryCommandState(b.dataset.cmd); } catch (_) {}
+      b.classList.toggle('on', on);
+    });
+  }
+  document.addEventListener('selectionchange', () => { if (document.activeElement === editor) refresh(); });
+
+  function count() {
+    const t = editor.innerText.replace(/\n$/, '');
+    $('wc').textContent = (t.trim().match(/\S+/g) || []).length;
+    $('cc').textContent = t.replace(/\n/g, '').length;
+    if (editor.innerHTML === '<br>') editor.innerHTML = '';
+  }
+  editor.addEventListener('input', count);
+  editor.addEventListener('paste', e => {
+    e.preventDefault();
+    document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+  });
+  count();
+
+  /* ---------- Audio engine ---------- */
+  let ctx, keyGain, ambGain, whiteBuf, brownBuf, rainBuf;
+  const keyVol = () => Math.pow($('keyVol').value / 100, 2);
+  const ambVol = () => Math.pow($('ambVol').value / 100, 2) * 0.6;
+
+  function makeBuf(seconds, fn) {
+    const n = Math.floor(ctx.sampleRate * seconds), b = ctx.createBuffer(1, n, ctx.sampleRate);
+    fn(b.getChannelData(0), n); return b;
+  }
+  // Seamless loop: crossfade the extra tail into the head so the seam is continuous
+  function loopable(gen, seconds) {
+    const fade = Math.floor(ctx.sampleRate * 1.0);
+    return makeBuf(seconds, (out, L) => {
+      const raw = new Float32Array(L + fade); gen(raw);
+      for (let i = 0; i < L; i++) {
+        out[i] = i < fade ? raw[i] * (i / fade) + raw[L + i] * (1 - i / fade) : raw[i];
+      }
+    });
+  }
+  function initAudio() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    keyGain = ctx.createGain(); keyGain.gain.value = keyVol(); keyGain.connect(ctx.destination);
+    ambGain = ctx.createGain(); ambGain.gain.value = ambVol(); ambGain.connect(ctx.destination);
+    whiteBuf = makeBuf(2, d => { for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; });
+    brownBuf = loopable(d => {
+      let last = 0;
+      for (let i = 0; i < d.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    }, 12);
+    rainBuf = loopable(d => { for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }, 8);
+    if (ambientChoice !== 'none') startAmbient(ambientChoice);
+  }
+
+  // Building blocks
+  function tone(t, type, f0, f1, dur, peak, dest) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest || keyGain); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function burst(t, ftype, freq, q, dur, peak, dest) {
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = whiteBuf; f.type = ftype; f.frequency.value = freq; f.Q.value = q;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest || keyGain);
+    s.start(t, Math.random() * 1.5, dur + 0.03);
+  }
+
+  const profiles = {
+    thock(t, k) {
+      const v = 1 + (Math.random() - 0.5) * 0.12, p = k.big ? 0.75 : 1;
+      tone(t, 'sine', 175 * v * p, 55 * p, 0.12, 1.0);
+      tone(t, 'triangle', 330 * v * p, 120, 0.035, 0.3);
+      burst(t, 'lowpass', 900, 0.7, 0.045, 0.55);
+    },
+    clicky(t, k) {
+      const v = 1 + (Math.random() - 0.5) * 0.08;
+      burst(t, 'highpass', 3500, 0.7, 0.016, 0.7);
+      tone(t, 'triangle', 4400 * v, 3000, 0.022, 0.3);
+      tone(t, 'square', 2100 * v, 1600, 0.012, 0.08);
+      // second click on the tactile bump release
+      burst(t + 0.03, 'highpass', 4200, 0.7, 0.012, 0.45);
+      tone(t + 0.03, 'triangle', 3400 * v, 2600, 0.016, 0.2);
+      tone(t + 0.034, 'sine', k.big ? 110 : 150, 70, 0.07, 0.4);
+    },
+    typewriter(t, k) {
+      const v = 1 + (Math.random() - 0.5) * 0.1;
+      burst(t, 'bandpass', 2300 * v, 1.1, 0.035, 0.9);
+      tone(t, 'square', 720 * v, 180, 0.045, 0.22);
+      tone(t, 'sine', 125, 48, 0.1, 0.65);
+      burst(t + 0.05, 'highpass', 4500, 0.8, 0.012, 0.3);
+      if (k.enter) { // carriage-return bell
+        [2400, 3610].forEach((f, i) => tone(t + 0.06, 'sine', f, f * 0.998, 1.1, i ? 0.12 : 0.22));
+        burst(t, 'bandpass', 900, 0.5, 0.25, 0.25);
+      }
+    }
+  };
+
+  const catalog=[['thock','Deep Thock','Signature'],['clicky','Crisp Clicky','Signature'],['typewriter','Vintage Typewriter','Signature']];
+  const PENT=[261.63,293.66,329.63,392,440,523.25,587.33,659.25,784,880], nf=k=>PENT[(k.code||0)%PENT.length];
+  // Parametric switch model: b=body thock, t=top-out tick, n=noise burst, c=click [freq,gap], r=metal ring
+  const SWP={
+    akkolav:{b:[150,62,.11,.85],t:[420,160,.03,.3],n:[1100,.9,.035,.45,'bandpass']},
+    mxblack:{b:[145,52,.11,.95],t:[350,130,.03,.25],n:[1300,.8,.03,.4,'bandpass']},
+    alpacalube:{b:[170,62,.12,.95],t:[380,140,.03,.28],n:[700,.7,.04,.35,'lowpass']},
+    horse:{horse:1},
+    tealios:{b:[155,62,.11,.9],t:[360,140,.03,.2],n:[900,.7,.04,.4,'lowpass']},
+    mxblueabs:{b:[165,68,.07,.5],t:[450,170,.03,.22],n:[3400,.8,.02,.55,'highpass'],c:[4000,.026]},
+    mxbluepbt:{b:[135,55,.1,.7],t:[340,130,.035,.2],n:[2400,.8,.022,.45,'highpass'],c:[3200,.03]},
+    mxblue:{b:[150,60,.08,.55],t:[400,150,.03,.2],n:[3000,.8,.02,.5,'highpass'],c:[3800,.028]},
+    mxbrown:{b:[190,80,.09,.8],t:[500,200,.03,.25],n:[1800,.8,.03,.4,'bandpass']},
+    mxred:{b:[210,90,.07,.7],n:[2500,.8,.025,.3,'bandpass']},
+    inkblack:{b:[140,50,.14,1],t:[300,110,.04,.25],n:[700,.7,.05,.5,'lowpass']},
+    holypanda:{b:[165,58,.13,.95],t:[420,150,.03,.35],n:[1400,.9,.035,.5,'bandpass']},
+    boba:{b:[130,48,.12,1],n:[600,.7,.04,.55,'lowpass']},
+    navy:{b:[170,65,.09,.6],n:[3500,.8,.02,.7,'highpass'],c:[3000,.035],r:[2200,.06,.08]},
+    alpaca:{b:[200,75,.08,.75],t:[550,220,.025,.3],n:[1200,.8,.03,.4,'bandpass']},
+    topre:{b:[120,55,.11,1],n:[500,.6,.04,.5,'lowpass']},
+    durock:{b:[180,70,.1,.85],t:[380,150,.03,.3],n:[1000,.8,.035,.5,'bandpass']},
+    razer:{b:[160,70,.08,.5],n:[4000,.8,.02,.6,'highpass'],c:[4600,.022],r:[3000,.05,.1]},
+    modelm:{b:[110,45,.12,.85],n:[2000,1,.03,.7,'bandpass'],c:[1700,.05],r:[1100,.09,.18]},
+    hhkb:{b:[135,60,.1,.9],n:[800,.7,.04,.45,'lowpass']},
+    laptop:{b:[260,120,.04,.5],n:[2800,.8,.015,.4,'bandpass']},
+    membrane:{b:[230,110,.06,.55],n:[1200,.6,.05,.5,'lowpass']}
+  };
+  const SWL=[['mxblue','Cherry MX Blue','Mechanical Switches'],['mxbrown','Cherry MX Brown','Mechanical Switches'],['mxred','Cherry MX Red','Mechanical Switches'],['inkblack','Gateron Ink Black','Mechanical Switches'],['holypanda','Holy Panda','Mechanical Switches'],['boba','Boba U4T','Mechanical Switches'],['navy','Kailh Box Navy','Mechanical Switches'],['alpaca','Alpaca V2','Mechanical Switches'],['topre','Topre 45g','Mechanical Switches'],['durock','Durock T1','Mechanical Switches'],['akkolav','Akko CS Lavender Purple','Mechanical Switches'],['mxblack','Cherry MX Black','Mechanical Switches'],['alpacalube','Durock Alpaca (Lubed)','Mechanical Switches'],['horse','GX Verdock \u2013 Mechanical Horse Trot','Mechanical Switches'],['tealios','Zealpc Tealios','Mechanical Switches'],['mxblueabs','Cherry MX Blue (ABS keycaps)','Mechanical Switches'],['mxbluepbt','Cherry MX Blue (PBT keycaps)','Mechanical Switches'],
+    ['razer','Razer Green (BlackWidow)','Device Profiles'],['modelm','IBM Model M','Device Profiles'],['hhkb','HHKB Professional','Device Profiles'],['laptop','Laptop Scissor','Device Profiles'],['membrane','Office Membrane','Device Profiles']];
+  function swPlay(p,t,k){
+    const v=1+(Math.random()-.5)*.1, s=k.big?.78:1;
+    if(p.horse){
+      const f=k.big?.8:1;
+      [0,.075].forEach((d,i)=>{const a=i?.6:1;tone(t+d,'sine',480*f*v,240*f,.07,.9*a);tone(t+d,'triangle',900*f,450*f,.03,.3*a);burst(t+d,'bandpass',1100,2,.03,.45*a);});
+      return;
+    }
+    if(p.b) tone(t,'sine',p.b[0]*v*s,p.b[1]*s,p.b[2],p.b[3]);
+    if(p.t) tone(t,'triangle',p.t[0]*v*s,p.t[1],p.t[2],p.t[3]);
+    if(p.n) burst(t,p.n[4],p.n[0]*v,p.n[1],p.n[2],p.n[3]);
+    if(p.c){
+      burst(t,'highpass',p.c[0],.7,.014,.6); tone(t,'triangle',p.c[0]*1.2,p.c[0]*.8,.02,.25);
+      burst(t+p.c[1],'highpass',p.c[0]*1.15,.7,.012,.4); tone(t+p.c[1],'triangle',p.c[0]*.9,p.c[0]*.7,.016,.15);
+    }
+    if(p.r) tone(t,'sine',p.r[0],p.r[0]*.995,p.r[1],p.r[2]);
+  }
+  SWL.forEach(([id,l,g])=>{catalog.push([id,l,g]);profiles[id]=(t,k)=>swPlay(SWP[id],t,k);});
+  const FN={
+    marimba:(t,k)=>{const f=nf(k);tone(t,'sine',f,f*.995,.4,.7);tone(t,'sine',f*4,f*4,.07,.2);},
+    piano:(t,k)=>{const f=nf(k);tone(t,'triangle',f,f,.7,.45);tone(t,'sine',f*2,f*2,.4,.18);burst(t,'lowpass',1200,.7,.02,.15);},
+    chime:(t,k)=>{const f=nf(k)*2;tone(t,'sine',f,f,1.2,.3);tone(t,'sine',f*2.76,f*2.76,.7,.12);},
+    retro:t=>{tone(t,'square',660,660,.05,.18);tone(t+.05,'square',990,990,.06,.18);},
+    laser:t=>tone(t,'sawtooth',1800,200,.13,.2),
+    terminal:t=>{tone(t,'square',1300,1300,.018,.15);burst(t,'highpass',5000,.7,.01,.2);},
+    wood:t=>{tone(t,'sine',820,700,.05,.8);burst(t,'bandpass',1600,3,.03,.4);},
+    bubble:t=>tone(t,'sine',300+Math.random()*100,900,.08,.55),
+    drum:t=>{tone(t,'sine',190,60,.16,1);burst(t,'bandpass',1800,.8,.05,.4);},
+    duck:t=>tone(t,'sawtooth',680,420,.1,.22),
+    drop:t=>tone(t,'sine',1500,500,.11,.5),
+    boing:t=>tone(t,'sine',180,650,.2,.5)
+  };
+  [['marimba','Marimba','Musical & Tonal'],['piano','Soft Piano','Musical & Tonal'],['chime','Glass Chime','Musical & Tonal'],
+   ['retro','Retro 8-bit','Gaming & Digital'],['laser','Laser Zap','Gaming & Digital'],['terminal','Sci-fi Terminal','Gaming & Digital'],
+   ['wood','Wood Block','Action & Impact'],['bubble','Bubble Pop','Action & Impact'],['drum','Drum Tap','Action & Impact'],
+   ['duck','Rubber Duck','Novelty & Fun'],['drop','Water Drop','Novelty & Fun'],['boing','Cartoon Boing','Novelty & Fun']
+  ].forEach(([id,l,g])=>{catalog.push([id,l,g]);profiles[id]=FN[id];});
+  const MECH=['Signature','Mechanical Switches','Device Profiles'];
+  const MODS = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph', 'OS'];
+  function playKey(k) {
+    initAudio();
+    if (!ctx) return;
+    profiles[$('profile').value](ctx.currentTime + 0.001, k || {});
+  }
+  // Fires on the physical keydown, before the character is even inserted
+  document.addEventListener('keydown', e => {
+    if (e.repeat || MODS.includes(e.key)) return;
+    if (e.target.tagName === 'SELECT' || e.target.type === 'range') return;
+    playKey({ big: e.key === ' ' || e.key === 'Backspace', enter: e.key === 'Enter', code: e.keyCode || 0 });
+  }, true);
+  document.addEventListener('keyup', e => {
+    if (!ctx || !$('relSnd').checked || MODS.includes(e.key)) return;
+    if (e.target.tagName === 'SELECT' || e.target.type === 'range') return;
+    const id = $('profile').value, c = catalog.find(x => x[0] === id);
+    if (!c || !MECH.includes(c[2])) return;
+    const p = SWP[id] || {}, f = p.b ? p.b[0] : 180, t = ctx.currentTime + .001;
+    burst(t, 'highpass', 3000, .7, .01, p.c ? .3 : .14);
+    tone(t, 'sine', f * 1.8, f * 1.2, .03, .1);
+  }, true);
+  document.addEventListener('pointerdown', initAudio, { once: true });
+  $('testKey').addEventListener('click', () => playKey({}));
+
+  $('keyVol').addEventListener('input', e => {
+    $('keyVolOut').textContent = e.target.value + '%';
+    if (keyGain) keyGain.gain.setTargetAtTime(keyVol(), ctx.currentTime, 0.01);
+  });
+
+  /* ---------- Ambient ---------- */
+  let ambientChoice = 'none', nodes = [], token = 0, pinkBuf;
+  const AMB=[['rain','Soothing Rain','Nature'],['storm','Thunderstorm','Nature'],['waves','Ocean Waves','Nature'],['wind','Forest Wind','Nature'],['stream','Flowing Stream','Nature'],['fire','Crackling Fireplace','Nature'],
+    ['birds','Morning Birdsong','Animals'],['crickets','Night Crickets','Animals'],['purr','Cozy Cat Purr','Animals'],['frogs','Pond Frogs','Animals'],
+    ['white','White Noise','Noise'],['pink','Pink Noise','Noise'],['brown','Focused Brown Noise','Noise'],['hum','Cabin Hum','Noise']];
+  function stopAmbient() {
+    token++;
+    const old = nodes; nodes = [];
+    old.forEach(n => { try { n.g.gain.setTargetAtTime(0, ctx.currentTime, 0.15); n.s.stop(ctx.currentTime + 1); } catch (_) {} });
+  }
+  function loopSrc(buf, filters, level) {
+    const s = ctx.createBufferSource(), g = ctx.createGain();
+    s.buffer = buf; s.loop = true; g.gain.value = 0;
+    let node = s;
+    filters.forEach(([type, freq, q]) => {
+      const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 0.7;
+      node.connect(f); node = f;
+    });
+    node.connect(g); g.connect(ambGain);
+    s.start(0, Math.random() * 3);
+    g.gain.setTargetAtTime(level, ctx.currentTime, 0.6);
+    nodes.push({ s, g });
+    return g;
+  }
+  function lfo(param, rate, depth) {
+    const o = ctx.createOscillator(), d = ctx.createGain();
+    o.frequency.value = rate; d.gain.value = depth; o.connect(d); d.connect(param); o.start();
+    nodes.push({ s: o, g: ctx.createGain() });
+  }
+  function sched(fn, min, max) {
+    const my = token;
+    (function loop() { if (my !== token) return; fn(); setTimeout(loop, (min + Math.random() * (max - min)) * 1000); })();
+  }
+  function cricket(f, rate, gate) {
+    const o = ctx.createOscillator(), am = ctx.createGain(), gt = ctx.createGain(), out = ctx.createGain();
+    am.gain.value = .5; gt.gain.value = .5; out.gain.value = 0; o.frequency.value = f;
+    o.connect(am); am.connect(gt); gt.connect(out); out.connect(ambGain);
+    [[rate, am], [gate, gt]].forEach(([r, node]) => {
+      const l = ctx.createOscillator(), d = ctx.createGain();
+      l.frequency.value = r; d.gain.value = .5; l.connect(d); d.connect(node.gain); l.start();
+      nodes.push({ s: l, g: ctx.createGain() });
+    });
+    o.start(); out.gain.setTargetAtTime(.12, ctx.currentTime, .8); nodes.push({ s: o, g: out });
+  }
+  function startAmbient(kind) {
+    pinkBuf = pinkBuf || loopable(d => {
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < d.length; i++) {
+        const w = Math.random() * 2 - 1;
+        b0=.99886*b0+w*.0555179; b1=.99332*b1+w*.0750759; b2=.969*b2+w*.153852;
+        b3=.8665*b3+w*.3104856; b4=.55*b4+w*.5329522; b5=-.7616*b5-w*.016898;
+        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*.5362)*.11; b6=w*.115926;
+      }
+    }, 12);
+    const drops = () => sched(() => burst(ctx.currentTime, 'bandpass', 2200 + Math.random() * 3800, 6, .03, .05 + Math.random() * .1, ambGain), .025, .135);
+    switch (kind) {
+      case 'rain':
+        loopSrc(rainBuf, [['highpass', 700, .6], ['lowpass', 7500, .6]], .32);
+        loopSrc(brownBuf, [['lowpass', 350, .5]], .5); drops(); break;
+      case 'storm':
+        loopSrc(rainBuf, [['highpass', 600, .6], ['lowpass', 8000, .6]], .5);
+        loopSrc(brownBuf, [['lowpass', 300, .5]], .7); drops();
+        sched(() => {
+          const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime;
+          s.buffer = brownBuf; f.type = 'lowpass'; f.frequency.value = 220;
+          g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.6, t + .4); g.gain.exponentialRampToValueAtTime(.001, t + 4.5);
+          s.connect(f); f.connect(g); g.connect(ambGain); s.start(t, Math.random() * 6, 5);
+        }, 7, 16); break;
+      case 'waves': {
+        const g = loopSrc(brownBuf, [['lowpass', 1400, .5]], .7); lfo(g.gain, .1, .55);
+        const f = loopSrc(rainBuf, [['bandpass', 3000, .4]], .12); lfo(f.gain, .1, .1); break;
+      }
+      case 'wind': {
+        const g = loopSrc(pinkBuf, [['bandpass', 500, .6]], .6); lfo(g.gain, .13, .4); lfo(g.gain, .043, .2); break;
+      }
+      case 'stream':
+        loopSrc(rainBuf, [['bandpass', 2200, .5], ['highpass', 900, .5]], .28);
+        sched(() => { const f = 500 + Math.random() * 900; tone(ctx.currentTime, 'sine', f, f * 1.8, .05, .05 + Math.random() * .06, ambGain); }, .03, .16); break;
+      case 'fire':
+        loopSrc(brownBuf, [['lowpass', 280, .5]], .6);
+        sched(() => {
+          const t = ctx.currentTime;
+          burst(t, 'highpass', 1500 + Math.random() * 3000, .8, .008 + Math.random() * .02, .08 + Math.random() * .25, ambGain);
+          if (Math.random() < .1) tone(t, 'triangle', 900 + Math.random() * 600, 300, .03, .12, ambGain);
+        }, .04, .35); break;
+      case 'birds':
+        sched(() => {
+          const t0 = ctx.currentTime, base = 2200 + Math.random() * 2600, n = 2 + Math.floor(Math.random() * 4);
+          for (let i = 0; i < n; i++) { const f = base * (1 + Math.random() * .4); tone(t0 + i * .11, 'sine', f, f * (Math.random() < .5 ? 1.4 : .75), .08, .12, ambGain); }
+        }, .8, 3.2); break;
+      case 'purr': {
+        const g = loopSrc(pinkBuf, [['bandpass', 190, .8]], .55); lfo(g.gain, 26, .45); lfo(g.gain, .33, .15);
+        const h = loopSrc(pinkBuf, [['bandpass', 520, 1.2]], .18); lfo(h.gain, 26, .15); lfo(h.gain, .33, .05);
+        const o = ctx.createOscillator(), og = ctx.createGain();
+        o.type = 'triangle'; o.frequency.value = 54; og.gain.value = 0; o.connect(og); og.connect(ambGain); o.start();
+        og.gain.setTargetAtTime(.05, ctx.currentTime, .8); lfo(og.gain, 26, .04); nodes.push({ s: o, g: og }); break;
+      }
+      case 'crickets': cricket(4300, 28, 2.1); cricket(4650, 31, 1.6); break;
+      case 'frogs':
+        sched(() => {
+          const t0 = ctx.currentTime, f = 110 + Math.random() * 60, n = 2 + Math.floor(Math.random() * 3);
+          for (let i = 0; i < n; i++) { tone(t0 + i * .13, 'triangle', f * 1.5, f, .1, .25, ambGain); tone(t0 + i * .13, 'sine', f * 3, f * 2, .06, .08, ambGain); }
+        }, .7, 2.8); break;
+      case 'white': loopSrc(rainBuf, [['lowpass', 12000, .5]], .35); break;
+      case 'pink': loopSrc(pinkBuf, [], 1.2); break;
+      case 'brown': loopSrc(brownBuf, [['lowpass', 900, .5]], 1.0); break;
+      case 'hum': {
+        loopSrc(brownBuf, [['lowpass', 500, .5]], .8);
+        [110, 165].forEach(fr => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.value = fr; g.gain.value = 0; o.connect(g); g.connect(ambGain); o.start();
+          g.gain.setTargetAtTime(.04, ctx.currentTime, .6); nodes.push({ s: o, g });
+        }); break;
+      }
+    }
+  }
+  $('ambient').addEventListener('change', e => {
+    ambientChoice = e.target.value;
+    initAudio();
+    stopAmbient();
+    if (ambientChoice !== 'none') startAmbient(ambientChoice);
+  });
+  $('ambVol').addEventListener('input', e => {
+    $('ambVolOut').textContent = e.target.value + '%';
+    if (ambGain) ambGain.gain.setTargetAtTime(ambVol(), ctx.currentTime, 0.02);
+  });
+
+  /* ---------- Save & export ---------- */
+  const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
+  if (!window.showSaveFilePicker) $('askRow').style.display = 'none';
+  async function pickHandle(name, desc, mime, ext) {
+    if (!$('askWhere').checked || !window.showSaveFilePicker) return null;
+    return window.showSaveFilePicker({ suggestedName: name, types: [{ description: desc, accept: { [mime]: [ext] } }] });
+  }
+  async function writeOut(blob, name, handle) {
+    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); return; }
+    const u = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }
+  function flash(el, msg, orig) { el.textContent = msg; setTimeout(() => el.textContent = orig, 2500); }
+
+  $('exportBtn').addEventListener('click', async () => {
+    const paper = $('paper'), label = $('exportLabel'), btn = $('exportBtn');
+    const fmt = $('imgFmt').value, mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png', name = `document-${stamp()}.${fmt}`;
+    if (typeof html2canvas === 'undefined') { alert('html2canvas failed to load. Check your internet connection and reload the page.'); return; }
+    let handle = null;
+    try { handle = await pickHandle(name, fmt.toUpperCase() + ' image', mime, '.' + fmt); } catch (e) { return; }
+    btn.disabled = true; label.textContent = 'Rendering\u2026';
+    editor.blur(); paper.classList.add('exporting');
+    $('workspace').scrollTop = 0; window.scrollTo(0, 0);
+    try {
+      await new Promise(r => setTimeout(r, 100));
+      const scale = Math.max(1, Math.min(3, 14000 / paper.offsetHeight, 14000 / paper.offsetWidth));
+      const canvas = await html2canvas(paper, {
+        scale, backgroundColor: getComputedStyle(paper).backgroundColor, useCORS: true, logging: false,
+        scrollX: 0, scrollY: 0,
+        onclone: doc => { const c = doc.getElementById('paper'); c.style.maxWidth = 'none'; c.style.width = '816px'; }
+      });
+      const blob = await new Promise(r => canvas.toBlob(r, mime, .95));
+      if (!blob) throw new Error('Image could not be encoded');
+      await writeOut(blob, name, handle);
+      flash(label, 'Saved as ' + fmt.toUpperCase(), 'Export Document as Image');
+    } catch (err) {
+      console.error(err); flash(label, 'Export failed \u2013 try again', 'Export Document as Image');
+    } finally {
+      paper.classList.remove('exporting'); btn.disabled = false;
+    }
+  });
+
+  $('fileBtn').addEventListener('click', async () => {
+    const f = $('fileFmt').value, cs = getComputedStyle($('paper')), label = $('fileLabel');
+    const wrap = `<div style="background:${cs.backgroundColor};color:${cs.color};font-family:Calibri,'Segoe UI',sans-serif;font-size:11pt;padding:24px;white-space:pre-wrap">${editor.innerHTML}</div>`;
+    const M = {
+      txt: [editor.innerText, 'text/plain', 'Text file'],
+      doc: [`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Document</title></head><body>${wrap}</body></html>`, 'application/msword', 'Word document'],
+      html: [`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document</title></head><body style="margin:0">${wrap}</body></html>`, 'text/html', 'Web page']
+    }[f];
+    const name = `document-${stamp()}.${f}`;
+    try {
+      const handle = await pickHandle(name, M[2], M[1], '.' + f);
+      await writeOut(new Blob([M[0]], { type: M[1] }), name, handle);
+      flash(label, 'Saved as .' + f, 'Save Document as File');
+    } catch (e) { if (e.name !== 'AbortError') { console.error(e); flash(label, 'Save failed \u2013 try again', 'Save Document as File'); } }
+  });
+
+  /* ---------- Theme, drawer ---------- */
+  const setTheme = d => {
+    document.body.classList.toggle('dark', d);
+    $('themeBtn').innerHTML = d ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+    try { localStorage.setItem('pe-dark', d ? '1' : '0'); } catch (_) {}
+  };
+  let dk = true; try { dk = localStorage.getItem('pe-dark') !== '0'; } catch (_) {}
+  setTheme(dk);
+  $('themeBtn').addEventListener('click', () => setTheme(!document.body.classList.contains('dark')));
+  $('soundBtn').addEventListener('click', () => $('drawer').classList.toggle('open'));
+
+  /* ---------- Selection keeper (pickers steal focus) ---------- */
+  let saved = null;
+  const restore = () => { editor.focus(); if (saved) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(saved); } };
+
+  /* ---------- Font size ---------- */
+  const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72], fs = $('fsize');
+  SIZES.forEach(n => fs.add(new Option(n, n))); fs.value = 11;
+  function fixSizes() {
+    editor.querySelectorAll('font[size="7"]').forEach(f => {
+      f.removeAttribute('size'); f.style.fontSize = fs.value + 'pt';
+      f.querySelectorAll('[style*="font-size"]').forEach(e => e.style.fontSize = '');
+    });
+  }
+  function applySize(n) { fs.value = n; restore(); document.execCommand('fontSize', false, '7'); fixSizes(); count(); }
+  fs.addEventListener('change', () => applySize(+fs.value));
+  const step = d => { const i = Math.max(0, Math.min(SIZES.length - 1, SIZES.indexOf(+fs.value) + d)); applySize(SIZES[i]); };
+  ['fup', 'fdn'].forEach(id => {
+    $(id).addEventListener('mousedown', e => e.preventDefault());
+    $(id).addEventListener('click', () => step(id === 'fup' ? 1 : -1));
+  });
+  editor.addEventListener('input', fixSizes);
+  function syncSize() {
+    const n = getSelection().anchorNode; if (!n) return;
+    const el = n.nodeType === 1 ? n : n.parentElement; if (!el) return;
+    const pt = Math.round(parseFloat(getComputedStyle(el).fontSize) * 0.75);
+    if (SIZES.includes(pt)) fs.value = pt;
+  }
+  document.addEventListener('selectionchange', () => {
+    const sel = getSelection();
+    if (sel.rangeCount && editor.contains(sel.anchorNode)) { saved = sel.getRangeAt(0).cloneRange(); syncSize(); }
+  });
+
+  /* ---------- Paper styles ---------- */
+  const PAPERS = {
+    white:   ['White', '#ffffff', '#222222', null],
+    whiteL:  ['White \u2013 Lined', '#ffffff', '#222222', 'rgba(60,110,190,.28)'],
+    black:   ['Black', '#151515', '#eaeaea', null],
+    blackL:  ['Black \u2013 Lined', '#151515', '#eaeaea', 'rgba(255,255,255,.17)'],
+    yellow:  ['Yellow', '#fff3a3', '#2b2400', null],
+    yellowL: ['Yellow \u2013 Lined', '#fff3a3', '#2b2400', 'rgba(110,85,0,.3)']
+  };
+  const paperEl = $('paper'), ps = $('paperSel');
+  Object.entries(PAPERS).forEach(([id, v]) => ps.add(new Option(v[0], id)));
+  let ink = '#222222';
+  function setPaper(id) {
+    const [, bg, tx, line] = PAPERS[id]; ink = tx;
+    paperEl.style.setProperty('--pbg', bg); paperEl.style.setProperty('--pink', tx);
+    paperEl.style.setProperty('--pline', line || 'transparent');
+    paperEl.classList.toggle('lined', !!line);
+  }
+  ps.addEventListener('change', () => setPaper(ps.value));
+  setPaper('white');
+
+  /* ---------- Font color ---------- */
+  function applyColor(c) {
+    if (c === 'auto') c = ink;
+    restore();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('foreColor', false, c);
+    document.execCommand('styleWithCSS', false, false);
+    if (c !== ink) { $('colorBar').style.background = c; }
+    count();
+  }
+  $('fcolor').addEventListener('input', e => applyColor(e.target.value));
+  document.querySelectorAll('.sw').forEach(b => {
+    b.addEventListener('mousedown', e => e.preventDefault());
+    b.addEventListener('click', () => { applyColor(b.dataset.color); if (b.dataset.color !== 'auto') { $('fcolor').value = b.dataset.color; } });
+  });
+
+  editor.focus();
+})();
+</script>
+</body>
+</html>
