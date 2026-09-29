@@ -50,6 +50,9 @@
   #editor{font-size:11pt}
   .paper.lined #editor{line-height:32px;background-image:linear-gradient(to bottom,transparent 0,transparent 31px,var(--pline) 31px,var(--pline) 32px);background-size:100% 32px}
   #workspace{padding-bottom:48px}
+  body{color-scheme:light} body.dark{color-scheme:dark}
+  select option,select optgroup{background:var(--inp);color:var(--tx)}
+  #drawer{max-width:92vw}
 </style>
 </head>
 <body class="dark">
@@ -112,6 +115,7 @@
   <div id="app" class="flex flex-1 min-h-0">
     <!-- Sidebar -->
     <aside id="drawer" class="side overflow-y-auto p-4 space-y-5 border-l border-gray-300">
+      <div class="flex items-center justify-between"><h2 class="text-sm font-semibold">Sounds &amp; export</h2><button id="closeDrawer" class="rb" aria-label="Close panel" title="Close"><i class="fa-solid fa-xmark"></i></button></div>
       <section class="space-y-3">
         <h2 class="text-sm font-semibold text-gray-600"><i class="fa-solid fa-keyboard mr-2"></i>Typing sounds</h2>
         <div>
@@ -643,6 +647,21 @@
     b.addEventListener('mousedown', e => e.preventDefault());
     b.addEventListener('click', () => { applyColor(b.dataset.color); if (b.dataset.color !== 'auto') { $('fcolor').value = b.dataset.color; } });
   });
+
+/* ---------- Populate sound dropdowns ---------- */
+  function fill(sel, list) {
+    let grp, og;
+    list.forEach(([id, l, g]) => {
+      if (g !== grp) { og = document.createElement('optgroup'); og.label = g; sel.appendChild(og); grp = g; }
+      og.appendChild(new Option(l, id));
+    });
+  }
+  fill($('profile'), catalog);
+  $('ambient').add(new Option('No Ambient Sound', 'none'));
+  fill($('ambient'), AMB);
+  $('rand').addEventListener('click', () => { $('profile').value = catalog[Math.floor(Math.random() * catalog.length)][0]; playKey({}); });
+  $('closeDrawer').addEventListener('click', () => $('drawer').classList.remove('open'));
+  $('drawer').classList.add('open'); // visible on first load; use the Sounds button to hide/show
 
   editor.focus();
 })();
